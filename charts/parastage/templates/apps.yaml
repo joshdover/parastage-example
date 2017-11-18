@@ -1,0 +1,105 @@
+{{- $relname := .Release.Name -}}
+{{- $info := .Values.info -}}
+{{- $images := .Values.images -}}
+{{- $default_resources := .Values.default_resources -}}
+
+{{- range $name, $app := .Values.apps }}
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ $relname }}-{{ $name }}
+  labels:
+    app: {{ $relname }}
+    track: {{ $info.track }}
+    pipeline_id: {{ $info.pipeline_id | quote }}
+    build_id: {{ $info.build_id | quote }}
+    tier: web
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      # These labels must match the template and the service selector below
+      app: {{ $relname }}
+      parastage_service: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $relname }}
+        parastage_service: {{ $name }}
+        track: {{ $info.track }}
+        pipeline_id: {{ $info.pipeline_id | quote }}
+        build_id: {{ $info.build_id | quote }}
+    spec:
+      # Give kubernetes access to the images built on Gitlab.
+      imagePullSecrets:
+      - name: gitlab-registry
+      containers:
+      - name: {{ $name }}
+        image: {{ $app.image }}
+        imagePullPolicy: Always
+        command:
+          # Inside our containers we provide a script that waits for postgres to be up and serving
+          # before we try to boot the application.
+          - bash
+          - bin/wait_for_postgres.sh
+          - {{ $relname }}-postgres
+          - python
+          - run.py
+        envFrom:
+          # All deployments use the same base config across the cluster. This makes making changes
+          # across all branches a breeze.
+          - configMapRef:
+              name: env
+          # We supply a branch-specific config to this deployment
+          - configMapRef:
+              name: {{ $relname }}.env
+          # For any specific values that need to be overriden for this repo, we supply another
+          # config.
+          {{ if eq $info.reponame $name }}
+          - configMapRef:
+              name: {{ $relname }}-branch.env
+          {{ end }}
+        ports:
+        - name: {{ $name }}
+          containerPort: {{ $app.port }}
+        livenessProbe:
+          httpGet:
+            path: /_healthz
+            port: {{ $app.port }}
+          initialDelaySeconds: 30
+          failureThreshold: 5
+          timeoutSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /_healthz
+            port: {{ $app.port }}
+          initialDelaySeconds: 30
+          timeoutSeconds: 3
+        resources:
+{{ toYaml (default $default_resources $app.resources) | indent 10 }}
+---
+# This service will expose the application to the ingress requests. These URLs are specified in the
+# ingress.yaml file.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $relname }}-{{ $name }}
+  labels:
+    app: {{ $relname }}
+    pipeline_id: {{ $info.pipeline_id | quote }}
+    build_id: {{ $info.build_id | quote }}
+spec:
+  ports:
+  - name: {{ $name }}
+    port: {{ $app.port }}
+  selector:
+    app: {{ $relname }}
+    parastage_service: {{ $name }}
+    tier: web
+---
+{{- end }}

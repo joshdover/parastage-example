@@ -1,0 +1,31 @@
+{{- $relname := .Release.Name -}}
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: {{ $relname }}-ingress
+  labels:
+    app: {{ $relname }}
+    pipeline_id: {{ .Values.info.pipeline_id | quote }}
+    build_id: {{ .Values.info.build_id | quote }}
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  rules:
+    {{- range $name, $app := .Values.apps }}
+    - host: {{ $name }}.{{ $relname }}.review.cratejoyeng.com
+      http:
+        paths:
+        - path: /
+          backend:
+            serviceName: {{ $relname }}-{{ $name }}
+            servicePort: {{ $app.port }}
+    {{- end }}
+
+    # Here we could specify other rules that may not fit the strict template super well
+    - host: myspecialthing.{{ $relname }}.review.cratejoyeng.com
+      http:
+        paths:
+        - path: /
+          backend:
+            serviceName: {{ $relname }}-web
+            servicePort: 3000

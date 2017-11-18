@@ -1,0 +1,49 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-postgres
+  labels:
+    app: {{ .Release.Name }}-postgres
+    track: {{ .Values.info.track }}
+    pipeline_id: {{ .Values.info.pipeline_id | quote }}
+    build_id: {{ .Values.info.build_id | quote }}
+    tier: db
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-postgres
+        track: {{ .Values.info.track }}
+        tier: db
+    spec:
+      imagePullSecrets:
+      - name: gitlab-registry
+      containers:
+      - name: postgres
+        image: gitlab.cratejoyeng.com:4567/cratejoy/cjdev:postgres
+        imagePullPolicy: Always
+        command:
+          - gosu
+          - postgres
+          - ./init.sh
+        ports:
+        - name: postgres
+          containerPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-postgres
+  labels:
+    app: {{ .Release.Name }}-postgres
+    pipeline_id: {{ .Values.info.pipeline_id | quote }}
+    build_id: {{ .Values.info.build_id | quote }}
+spec:
+  ports:
+  - name: postgres
+    port: 5432
+  selector:
+    app: {{ .Release.Name }}-postgres
+    tier: db

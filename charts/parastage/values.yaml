@@ -1,0 +1,21 @@
+info:
+  # These are used to force a deployment to redeploy / pull new images
+  pipeline_id: 0
+  build_id: 0
+  reponame: ""
+
+default_resources:
+  requests:
+    cpu: 100m
+    memory: 250Mi
+  limits:
+    cpu: 250m
+    memory: 1024Mi
+
+apps:
+  web:
+    image: myorg/web:latest
+    port: 3000
+  admin:
+    image: myorg/admin:latest
+    port: 3001

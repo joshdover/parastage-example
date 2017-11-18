@@ -1,0 +1,21 @@
+# This first config will be exposed to only deployments on this branch
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: {{ .Release.Name }}.env
+data:
+  WOWZA_VARS: "here is a config option!"
+  ADMIN_SERVER_NAME: admin.{{ .Release.Name }}.review.cratejoyeng.com
+  WEB_SERVER_NAME: web.{{ .Release.Name }}.review.cratejoyeng.com
+  # We can connect to this branch's data services via their service names thanks to kube-dns.
+  POSTGRES_HOST: {{ .Release.Name }}-postgres
+  REDIS_HOST: {{ .Release.Name }}-redis
+  MEMCACHED_HOST: {{ .Release.Name }}-memcached
+---
+# This second config will be exposed to only the deployment that matches the "reponame" config.
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: {{ .Release.Name }}-branch.env
+data:
+  S3_URL: //s3.amazonaws.com/special_bucket/path

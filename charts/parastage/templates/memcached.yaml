@@ -1,0 +1,39 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-memcached
+  labels:
+    app: {{ .Release.Name }}
+    pipeline_id: {{ .Values.info.pipeline_id | quote }}
+    build_id: {{ .Values.info.build_id | quote }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-memcached
+    spec:
+      imagePullSecrets:
+      - name: gitlab-registry
+      containers:
+      - name: memcached
+        image: memcached
+        ports:
+        - name: memcached
+          containerPort: 11211
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-memcached
+  labels:
+    app: {{ .Release.Name }}-memcached
+    pipeline_id: {{ .Values.info.pipeline_id | quote }}
+    build_id: {{ .Values.info.build_id | quote }}
+spec:
+  ports:
+  - name: memcached
+    port: 11211
+  selector:
+    app: {{ .Release.Name }}-memcached

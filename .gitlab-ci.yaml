@@ -1,0 +1,54 @@
+image: gitlab.mycorp.com/parastage:v1
+
+variables:
+  # We host a container/service combo in the cluster that just runs the docker:dind image. Serves
+  # as a dumb docker cache that will keep layers around until the pod gets restarted.
+  DOCKER_HOST: tcp://docker-builder:2375
+  DOCKER_DRIVER: overlay
+  KUBE_DOMAIN: review.mycropeng.com
+  KUBE_NAMESPACE: review
+  GH_ORG: myorg
+  GH_TOKEN: xxxxxxxx
+
+stages:
+  - deploy
+  - cleanup
+
+launch_apps:
+  stage: deploy
+  script:
+    - ./build.sh
+    - ./deploy.sh
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    url: http://admin.$CI_ENVIRONMENT_SLUG.$KUBE_DOMAIN
+    on_stop: stop_review
+  retry: 1
+  only:
+    - branches
+
+# If anything fails, fallback and tell github it got broked.
+error_messages:
+  stage: cleanup
+  allow_failure: true
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - pr-messenger --token $GH_TOKEN --org $GH_ORG --repo $CI_PROJECT_NAME --sha $CI_COMMIT_SHA --only-update-pending --status_name "parastage/0_build" --status_state "failure" --status_description "Runover failed to build your branch" --status_url "$CI_PROJECT_URL/pipelines/$CI_PIPELINE_ID"
+    - pr-messenger --token $GH_TOKEN --org $GH_ORG --repo $CI_PROJECT_NAME --sha $CI_COMMIT_SHA --only-update-pending --status_name "parastage/1_deploy" --status_state "failure" --status_description "Runover could not deploy your branch" --status_url "$CI_PROJECT_URL/pipelines/$CI_PIPELINE_ID"
+  when: on_failure
+  only:
+    - branches
+
+stop_review:
+  stage: cleanup
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - ./destroy.sh
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    action: stop
+  when: manual
+  only:
+    - branches
